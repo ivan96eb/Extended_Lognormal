@@ -3,7 +3,7 @@ import healpy as hp
 from scipy.signal import savgol_filter
 from multiprocessing import Pool
 from .transform_cls import C_NG_to_C_G,diagnose_cl_G
-from .mocker import get_y_maps,get_kappa,get_kappa_pixwin
+from .mocker import get_y_maps,get_kappa,get_kappa_pixwin,get_kappa_pixwin_alms
 
 def correct_mult_cl(cl,A):
     N_bins = cl.shape[0]
@@ -15,64 +15,24 @@ def correct_mult_cl(cl,A):
             cl_correct[j,i] = cl_ij
     return cl_correct
 
-def cl_mock_avg(cl_NG,cl_G,fitted_params,pixwin,pixwin_ell_filter,N,N_mocks=200,Nside=256,N_bins=4,gen_lmax=767):
+def cl_mock_avg(cl_NG,cl_G,fitted_params,pixwin,pixwin_ell_filter,N,auto=True,N_mocks=200,Nside=256,N_bins=4,gen_lmax=767):
     cl_arr  = np.zeros((N_mocks,N_bins,N_bins,gen_lmax+1))
     for mock in range(N_mocks):
         if mock % 50 == 0:
             print(f'Working on mock {mock}')
         y_maps, _      = get_y_maps(cl_G, Nside, N_bins, gen_lmax)
-        kappa_mock     = get_kappa_pixwin(y_maps, N_bins, N, fitted_params,Nside,pixwin_ell_filter)
+        kappa_mocklm     = get_kappa_pixwin_alms(y_maps, N_bins, N, fitted_params,Nside,pixwin_ell_filter)
         for i in range(N_bins):
             for j in range(i+1):
-                c_ij = hp.anafast(kappa_mock[i], kappa_mock[j], lmax=gen_lmax)
+                if auto and i != j:
+                    continue
+                c_ij = hp.alm2cl(kappa_mocklm[i], kappa_mocklm[j], lmax=gen_lmax)
                 cl_arr[mock,i,j] = c_ij
                 cl_arr[mock,j,i] = c_ij
     perdiff_arr = np.zeros_like(cl_arr)
     for mock in range(N_mocks):
         perdiff_arr[mock]=(cl_arr[mock]/(cl_NG*pixwin**2)) 
     average_ratio = np.average(perdiff_arr,axis=0)
-    return average_ratio
-
-def process_single_mock(args):
-    """Process a single mock iteration"""
-    mock, cl_G, fitted_params, pixwin, pixwin_ell_filter, N, Nside, N_bins, gen_lmax = args
-    
-    y_maps, _ = get_y_maps(cl_G, Nside, N_bins, gen_lmax)
-    kappa_mock = get_kappa_pixwin(y_maps, N_bins, N, fitted_params, Nside, pixwin_ell_filter)
-    
-    cl_single = np.zeros((N_bins, N_bins, gen_lmax+1))
-    for i in range(N_bins):
-        for j in range(i+1):
-            c_ij = hp.anafast(kappa_mock[i], kappa_mock[j], lmax=gen_lmax)
-            cl_single[i, j] = c_ij
-            cl_single[j, i] = c_ij
-    
-    return cl_single
-
-def cl_mock_avg_parallel(cl_NG, cl_G, fitted_params, pixwin, pixwin_ell_filter, N, N_mocks=200, Nside=256, N_bins=4, gen_lmax=767, n_processes=8):
-    """
-    Parallel version of cl_mock_avg
-    
-    Parameters:
-    -----------
-    n_processes : int, optional
-        Number of processes to use. If None, uses all available CPUs.
-    """
-    # Prepare arguments for each mock
-    args_list = [(mock, cl_G, fitted_params, pixwin, pixwin_ell_filter, N, Nside, N_bins, gen_lmax) 
-                 for mock in range(N_mocks)]
-    
-    # Process mocks in parallel
-    with Pool(processes=n_processes) as pool:
-        cl_list = pool.map(process_single_mock, args_list)
-    
-    # Convert list to array
-    cl_arr = np.array(cl_list)
-    
-    # Calculate perdiff and average
-    perdiff_arr = cl_arr / (cl_NG * pixwin**2)
-    average_ratio = np.average(perdiff_arr, axis=0)
-    
     return average_ratio
 
 def Acoeff(average_ratio):
@@ -127,11 +87,10 @@ def debiaser_premium(cl_NG,N,params,pixwin,pixwinellfilter,N_iter=3,Nmocks=200):
         diagnose_cl_G(cl_G)
         avg_ratio = cl_mock_avg(cl_NG,cl_G,params,pixwin,pixwinellfilter,N,Nmocks,N_bins=Nbins)
         smooth_bias = np.ones_like(avg_ratio)  
+        # Only smooth diagonal terms since auto=True
         for i in range(Nbins):
-            for j in range(i+1):
-                ratio_ij = smooth_pixwin_savgol(avg_ratio[i,j,2:2*256],window_length=50)
-                smooth_bias[i,j,2:2*256] = ratio_ij
-                smooth_bias[j,i,2:2*256] = ratio_ij
+            ratio_ii = smooth_pixwin_savgol(avg_ratio[i,i,2:2*256],window_length=50)
+            smooth_bias[i,i,2:2*256] = ratio_ii
         print('beta=',1/Acoeff(avg_ratio))
         beta = np.array([smooth_bias[i,i] for i in range(Nbins)])
         A = 1/beta
