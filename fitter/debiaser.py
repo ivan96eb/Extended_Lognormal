@@ -3,7 +3,7 @@ import healpy as hp
 from scipy.signal import savgol_filter
 from multiprocessing import Pool
 from .transform_cls import C_NG_to_C_G,diagnose_cl_G
-from .mocker import get_y_maps,get_kappa,get_kappa_pixwin,get_kappa_pixwin_alms
+from .mocker import get_y_maps,get_kappa,get_kappa_pixwin
 
 def correct_mult_cl(cl,A):
     N_bins = cl.shape[0]
@@ -21,12 +21,12 @@ def cl_mock_avg(cl_NG,cl_G,fitted_params,pixwin,pixwin_ell_filter,N,auto=True,N_
         if mock % 50 == 0:
             print(f'Working on mock {mock}')
         y_maps, _      = get_y_maps(cl_G, Nside, N_bins, gen_lmax)
-        kappa_mocklm     = get_kappa_pixwin_alms(y_maps, N_bins, N, fitted_params,Nside,pixwin_ell_filter)
+        kappa_mock     = get_kappa_pixwin(y_maps, N_bins, N, fitted_params,Nside,pixwin_ell_filter)
         for i in range(N_bins):
             for j in range(i+1):
                 if auto and i != j:
                     continue
-                c_ij = hp.alm2cl(kappa_mocklm[i], kappa_mocklm[j], lmax=gen_lmax)
+                c_ij = hp.anafast(kappa_mock[i], kappa_mock[j], lmax=gen_lmax)
                 cl_arr[mock,i,j] = c_ij
                 cl_arr[mock,j,i] = c_ij
     perdiff_arr = np.zeros_like(cl_arr)
