@@ -6,15 +6,15 @@ def get_binned_data(x_gaussianized, y_data, x_range,n_bins):
     """
     Bin x values and compute mean y within each bin
     
-    Parameters:
-    -----------
+    Parameters
+    ----------
     x_gaussianized : array of Gaussianized x values
     y_data : array of corresponding y values
     n_bins : number of bins
     x_range : tuple (min, max) to keep 
     
-    Returns:
-    --------
+    Returns
+    -------
     x_bin_centers : x value at center of each bin
     y_bin_means : mean y value in each bin
     """
@@ -48,17 +48,16 @@ def empirical_cdf(map):
     """
     Computes the CDF of a map
    
-    Parameters:
-    -----------
+    Parameters
+    ----------
     map : array of that represents map
    
-    Returns:
-    --------
+    Returns
+    -------
     sorted_map : x-coordinates of the CDF
     cdf_values : y-coordinates of the CDF
     """
     sorted_map = np.sort(map)
-    # 2. Compute empirical CDF values
     cdf_values = np.arange(1, len(sorted_map) + 1) / len(sorted_map)
     cdf_values = np.clip(cdf_values, 1e-10, 1 - 1e-10)
    
@@ -69,14 +68,14 @@ def histogramer2d(map,Nbins,x_range=(-4.5,4.5)):
     Given a NL field, computes the black triangles in
     FIG 1 in 2411.04759
     
-    Parameters:
-    -----------
+    Parameters
+    ----------
     map : field that we want to model
     
-    Returns:
-    --------
-    x_avg : x value of triangle
-    y_avg : y value of triangle
+    Returns
+    -------
+    x_avg : x value of triangle (standard normal)
+    y_avg : y value of triangle (NL field)
     """
     y_data, cdf  = empirical_cdf(map)
     x_gaussianized = norm.ppf(cdf)
