@@ -19,7 +19,6 @@ def Gn(x, n, params,N_nodes = 20):
     """
 
     def compute_normalization(params):
-        """Compute n such that E[n*arg - 1] = 0"""
         if n == '2':
             return None
         elif n == '3':

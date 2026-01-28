@@ -2,13 +2,13 @@ import numpy as np
 from scipy.stats import norm
 
 
-def get_binned_data(x_gaussianized, y_data, x_range,n_bins):
+def get_binned_data(x_data, y_data, x_range,n_bins):
     """
     Bin x values and compute mean y within each bin
     
     Parameters
     ----------
-    x_gaussianized : array of Gaussianized x values
+    x_data : array of Gaussianized x values
     y_data : array of corresponding y values
     n_bins : number of bins
     x_range : tuple (min, max) to keep 
@@ -18,9 +18,9 @@ def get_binned_data(x_gaussianized, y_data, x_range,n_bins):
     x_bin_centers : x value at center of each bin
     y_bin_means : mean y value in each bin
     """
-    # Keep only values between -5 and 5
-    mask = (x_gaussianized >= x_range[0]) & (x_gaussianized <= x_range[1])
-    x_filtered = x_gaussianized[mask]
+
+    mask = (x_data >= x_range[0]) & (x_data <= x_range[1])
+    x_filtered = x_data[mask]
     y_filtered = y_data[mask]
     
     # Create bins
@@ -32,14 +32,14 @@ def get_binned_data(x_gaussianized, y_data, x_range,n_bins):
     # Clip to valid range
     bin_indices = np.clip(bin_indices, 0, n_bins - 1)
     
-    # Compute mean y for each bin
     x_bin_centers = []
-    y_bin_means = []
+    y_bin_means   = []
     
     for i in range(n_bins):
         bin_mask = (bin_indices == i)
-        if np.sum(bin_mask) > 0:  # Only include bins with data
-            x_bin_centers.append(bin_edges[i:i+2].mean())  # center of bin
+        # We only want to include bins with data
+        if np.sum(bin_mask) > 0:  
+            x_bin_centers.append(bin_edges[i:i+2].mean())  
             y_bin_means.append(y_filtered[bin_mask].mean())
     
     return np.array(x_bin_centers), np.array(y_bin_means)

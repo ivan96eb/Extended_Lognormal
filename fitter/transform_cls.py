@@ -97,7 +97,6 @@ def C_NG_to_C_G(cl_NG, fitted_params, N_bins, N,
     pre       = get_gh_nodes_weights(Nnodes)
     
     def process_pair_optimized(i, j):
-        """Process a single (i,j) bin pair with precomputed Legendre polynomials"""
         params_i = fitted_params[i]
         params_j = fitted_params[j]
                 

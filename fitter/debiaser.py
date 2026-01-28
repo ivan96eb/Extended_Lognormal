@@ -1,9 +1,8 @@
 import numpy as np 
 import healpy as hp
 from scipy.signal import savgol_filter
-from multiprocessing import Pool
 from .transform_cls import C_NG_to_C_G,diagnose_cl_G
-from .mocker import get_y_maps,get_kappa,get_kappa_pixwin
+from .mocker import get_y_maps,get_kappa_lm_pixwin
 
 def correct_mult_cl(cl,A):
     N_bins = cl.shape[0]
@@ -15,23 +14,25 @@ def correct_mult_cl(cl,A):
             cl_correct[j,i] = cl_ij
     return cl_correct
 
-def cl_mock_avg(cl_NG,cl_G,fitted_params,pixwin,pixwin_ell_filter,N,auto=True,N_mocks=200,Nside=256,N_bins=4,gen_lmax=767):
-    cl_arr  = np.zeros((N_mocks,N_bins,N_bins,gen_lmax+1))
+def cl_mock_avg(cl_NG,cl_G,fitted_params,pixwin,pixwin_ell_filter,N,Nside,N_bins,auto=True,N_mocks=200):
+    gen_lmax = 3*Nside - 1 
+    lmax     = 2*Nside
+    cl_arr   = np.zeros((N_mocks,N_bins,N_bins,lmax+1))
     for mock in range(N_mocks):
         if mock % 50 == 0:
             print(f'Working on mock {mock}')
         y_maps, _      = get_y_maps(cl_G, Nside, N_bins, gen_lmax)
-        kappa_mock     = get_kappa_pixwin(y_maps, N_bins, N, fitted_params,Nside,pixwin_ell_filter)
+        kappa_lm_mock  = get_kappa_lm_pixwin(y_maps, N_bins, N, fitted_params,Nside,pixwin_ell_filter)
         for i in range(N_bins):
             for j in range(i+1):
                 if auto and i != j:
                     continue
-                c_ij = hp.anafast(kappa_mock[i], kappa_mock[j], lmax=gen_lmax)
+                c_ij = hp.alm2cl(kappa_lm_mock[i], kappa_lm_mock[j], lmax=lmax)
                 cl_arr[mock,i,j] = c_ij
                 cl_arr[mock,j,i] = c_ij
     perdiff_arr = np.zeros_like(cl_arr)
     for mock in range(N_mocks):
-        perdiff_arr[mock]=(cl_arr[mock]/(cl_NG*pixwin**2)) 
+        perdiff_arr[mock]=(cl_arr[mock]/(cl_NG[:,:,:lmax+1]*pixwin[:lmax+1]**2)) 
     average_ratio = np.average(perdiff_arr,axis=0)
     return average_ratio
 
