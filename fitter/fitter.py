@@ -90,16 +90,10 @@ def fit_gn_with_constraint(x_data, y_data, N, cls, initial_params = None):
              Best fit parameters.
     """
     var = variance_from_Cl(cls)
-    if initial_params is None:
-        initial_params = np.ones((int(N)))
-        #print(f"Dumb initialization for G{N}: {initial_params}")
-
-    initial_unconstrained_params = initial_params[:int(N)-1]
-
     def calc_constrained_params(unconstrained_params, var, N):
         if N == '2':
-            alpha = unconstrained_params[0]
-            beta = np.sqrt(var / (np.exp(alpha**2)-1))
+            beta = unconstrained_params[0]
+            alpha = np.sqrt(np.log(1 + var / beta**2))
             return np.array([alpha, beta])
         elif N == '3':
             a, b = unconstrained_params
@@ -107,7 +101,6 @@ def fit_gn_with_constraint(x_data, y_data, N, cls, initial_params = None):
             return np.array([a, b, c])
         else:
             raise ValueError(f"Cannot do a constrained fit for G{N}. Use fit_gn_to_data instead.")
-
     def cost_function(unconstrained_params):
         """Least squares cost"""
         params = calc_constrained_params(unconstrained_params, var, N)
@@ -116,11 +109,28 @@ def fit_gn_with_constraint(x_data, y_data, N, cls, initial_params = None):
             return np.sum((y_pred - y_data)**2)
         except:
             return np.inf
-    
+    if initial_params is None:
+        if N == '2':
+            beta_grid = np.geomspace(1e-6, 1, 50)
+            cost_grid = np.array([cost_function([b]) for b in beta_grid])
+            beta_init = beta_grid[np.argmin(cost_grid)]
+            initial_params = np.array([beta_init, np.nan])
+        elif N == '3':
+            a_grid = np.linspace(0.01, 1.7, 25)
+            b_grid = np.linspace(0.01, 2.7, 25)
+            cost_grid = np.array([
+                [cost_function([aa, bb]) for aa in a_grid]
+                for bb in b_grid
+            ])
+            j_min, i_min = np.unravel_index(np.argmin(cost_grid), cost_grid.shape)
+            initial_params = np.array([a_grid[i_min], b_grid[j_min], np.nan])
+        else:
+            initial_params = np.ones(int(N))
+    initial_unconstrained_params = initial_params[:int(N)-1]
+    #initial_unconstrained_params = np.ones_like(initial_unconstrained_params)
     result = minimize(
         fun=cost_function,
         x0=initial_unconstrained_params,
         method='BFGS'
     )
-
     return calc_constrained_params(result.x, var, N)

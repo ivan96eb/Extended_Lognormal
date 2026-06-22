@@ -15,10 +15,10 @@ def ratio_ploter(average_ratio,N_bins,save_path=None,ellmin=10,ymin=0.95,ymax=1.
             ax = axes[i, j]
             ell_plot = ell[ellmin:]
             avg_plot = average_ratio[i, j, ellmin:]
-            ax.semilogx(ell_plot, avg_plot, label='Average ratio', lw=2, color='blue')
+            ax.semilogx(ell_plot, avg_plot, label='Average ratio', lw=0.8, color='blue')
             ax.axhline(1, color='black', linestyle='--', lw=1, alpha=0.5)
             ax.set_xlabel(r'$\ell$', fontsize=11)
-            ax.set_ylabel(r'$\langle C_\ell^{\rm mock}/C_\ell^{\rm true}\rangle$', fontsize=11)
+            ax.set_ylabel(r'$\langle C_\ell^{\rm mock}/(W_\ell^2C_\ell^{\rm true})\rangle$', fontsize=11)
             # Add bin labels
             if i == j:
                 title = f'Bin {i+1}'
@@ -27,7 +27,9 @@ def ratio_ploter(average_ratio,N_bins,save_path=None,ellmin=10,ymin=0.95,ymax=1.
             ax.set_title(title, fontsize=11)
             ax.grid(True, alpha=0.3, which='both')
             ax.set_ylim(ymin,ymax)
-            ax.axvline(dashed_vert,linestyle='dashed',color='black',lw=1, alpha=0.5)
+            if dashed_vert is not None:
+                ax.axvline(dashed_vert,linestyle='dashed',color='black',lw=1, alpha=0.5)
+    plt.tight_layout()
     if save_path is not None:
         plt.savefig(save_path)
     if save_path is None:  
@@ -35,7 +37,7 @@ def ratio_ploter(average_ratio,N_bins,save_path=None,ellmin=10,ymin=0.95,ymax=1.
     plt.close()  
 
 def hist_comparisson_plotter(kappa_sim,kappa_lr_pix,kappa_mock,kappa_mock_pix,N_bins,N,save_path=None):
-    fig, axes = plt.subplots(2, 2, figsize=(10, 10))
+    fig, axes = plt.subplots(2, N_bins//2, figsize=(10, 10))
     axes = axes.flatten()
     for i in range(N_bins):
         ax = axes[i]
@@ -68,7 +70,7 @@ def hist_comparisson_plotter(kappa_sim,kappa_lr_pix,kappa_mock,kappa_mock_pix,N_
     plt.close()  
 
 def hist_comparisson_plotter_linear(kappa_sim,kappa_lr_pix,kappa_mock,kappa_mock_pix,N_bins,N,save_path=None):
-    fig, axes = plt.subplots(2, 2, figsize=(10, 10))
+    fig, axes = plt.subplots(2, N_bins//2, figsize=(10, 10))
     axes = axes.flatten()
     for i in range(N_bins):
         ax = axes[i]
@@ -95,6 +97,43 @@ def hist_comparisson_plotter_linear(kappa_sim,kappa_lr_pix,kappa_mock,kappa_mock
             ax.legend(fontsize=13, framealpha=0.9)
         ax.grid(alpha=0.3)
         ax.tick_params(labelsize=13)
+    plt.tight_layout()
+    if save_path is not None:
+        plt.savefig(save_path)
+    if save_path is None:  
+        plt.show()
+    plt.close()  
+
+def ratio_ploter_comp(average_ratio,average_ratio_filt,N_bins,save_path=None,ellmin=10,ymin=0.95,ymax=1.05,dashed_vert=2*256):
+    fig, axes = plt.subplots(N_bins, N_bins, figsize=(14, 14))
+    fig.subplots_adjust(hspace=0.3, wspace=0.3)
+    ell = np.arange(average_ratio.shape[2])
+    for i in range(N_bins):
+        for j in range(N_bins):
+            if j > i:
+                # Upper triangle: turn off
+                axes[i, j].axis('off')
+                continue
+            ax = axes[i, j]
+            ell_plot = ell[ellmin:]
+            
+            avg_plot = average_ratio[i, j, ellmin:]
+            avg_plot_filt = average_ratio_filt[i, j, ellmin:]
+            ax.semilogx(ell_plot, avg_plot, label='Average ratio', lw=0.8, color='blue')
+            ax.semilogx(ell_plot, avg_plot_filt, label='Average ratio filtered', lw=0.8, color='red')
+            ax.axhline(1, color='black', linestyle='--', lw=1, alpha=0.5)
+            ax.set_xlabel(r'$\ell$', fontsize=11)
+            ax.set_ylabel(r'$\langle C_\ell^{\rm mock}/(W_\ell^2C_\ell^{\rm true})\rangle$', fontsize=11)
+            # Add bin labels
+            if i == j:
+                title = f'Bin {i+1}'
+            else:
+                title = f'Bins ({i+1},{j+1})'
+            ax.set_title(title, fontsize=11)
+            ax.grid(True, alpha=0.3, which='both')
+            ax.set_ylim(ymin,ymax)
+            if dashed_vert is not None:
+                ax.axvline(dashed_vert,linestyle='dashed',color='black',lw=1, alpha=0.5)
     plt.tight_layout()
     if save_path is not None:
         plt.savefig(save_path)

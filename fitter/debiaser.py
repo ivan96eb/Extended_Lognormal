@@ -97,3 +97,47 @@ def debiaser_premium(cl_NG,N,params,pixwin,pixwinellfilter,N_iter=3,Nmocks=200):
         A = 1/beta
         cl_NG_corr = correct_mult_cl(cl_NG_corr,A)
     return cl_NG_corr
+
+def ccl_biaser(cls_ccl,bias):
+    """
+    Biases .
+    
+    Parameters
+    ----------
+    cls_ccl : array
+             input ccl cls of all sims
+             with shape 
+             (N_cosmo,N_bins,N_bins,ells)
+    bias : array 
+             effectively, sims/(ccl*pixwin**2)
+             but filtered
+    
+    Returns
+    -------
+    biased_cl : array
+             Biased ccl cls that match sims.
+    """
+    N_cosmo      = cls_ccl.shape[0]
+    N_bins       = cls_ccl.shape[1]
+    corrected_cl = np.zeros_like(cls_ccl)
+    corr_coeff   = np.zeros_like(cls_ccl)
+    biased_cl    = np.zeros_like(cls_ccl)
+    
+    for i in range(N_bins):
+        for j in range(N_bins):
+            if i == j:
+                corr_coeff[:,i,j] = 1.
+            else:
+                corr_coeff[:,i,j] = cls_ccl[:,i,j]/np.sqrt(cls_ccl[:,i,i]*cls_ccl[:,j,j])
+
+    for cosmo in range(N_cosmo):
+        for i in range(N_bins):
+            corrected_cl[cosmo,i,i] = cls_ccl[cosmo,i,i]*(bias[i,i])
+
+    for cosmo in range(N_cosmo):
+        for i in range(N_bins):
+            for j in range(N_bins):
+                biased_cl[cosmo,i,j] = corr_coeff[cosmo,i,j]*np.sqrt(corrected_cl[cosmo,i,i]*corrected_cl[cosmo,j,j])
+    mask = np.isnan(biased_cl)
+    biased_cl[mask] = cls_ccl[mask]
+    return biased_cl
