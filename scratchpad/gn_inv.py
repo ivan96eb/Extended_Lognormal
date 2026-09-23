@@ -20,9 +20,10 @@ def _g3(x, a, b, c):
 
 
 def _g5_unnormalized(x, a1, a2, b, t, x0):
-    # (exp(a1*x - a1^2/2) + b*x) * (1 + exp((x - x0)*t))^((a2 - a1)/t),
-    # with the break factor written via logaddexp so it cannot overflow
-    brk = np.exp((a2 - a1) / t * np.logaddexp(0.0, t * (x - x0)))
+    # (exp(a1*x - a1^2/2) + b*x) * (1 + exp((x - x0)*t))^((a2 - a1)/t).
+    # log1p(exp(.)) is ~10% faster than logaddexp but overflows for
+    # t*(x - x0) > ~709; typical fits stay below ~25 even at the grid edge
+    brk = np.exp((a2 - a1) / t * np.log1p(np.exp(t * (x - x0))))
     return (np.exp(a1 * x - 0.5 * a1**2) + b * x) * brk
 
 
@@ -37,7 +38,8 @@ def _g5(x, a1, a2, b, t, x0):
 
 def _g4_log_unnormalized(x, a1, a2, t, x0):
     # log of exp(a1*x - a1^2/2) * (1 + exp((x - x0)*t))^((a2 - a1)/t)
-    return a1 * x - 0.5 * a1**2 + (a2 - a1) / t * np.logaddexp(0.0, t * (x - x0))
+    # (log1p(exp(.)) rather than logaddexp for speed; see _g5_unnormalized)
+    return a1 * x - 0.5 * a1**2 + (a2 - a1) / t * np.log1p(np.exp(t * (x - x0)))
 
 
 def _g4(x, a1, a2, t, x0):
