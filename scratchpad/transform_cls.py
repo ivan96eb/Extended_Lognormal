@@ -4,6 +4,8 @@ From the non-Gaussian C_ell of delta to the C_ell of the Gaussian field y that G
 
     C_NG -> xi_NG(theta) -> xi_G(theta) = F^{-1}(xi_NG(theta)) -> C_G
 """
+import warnings
+
 import numpy as np
 from gn_inv import _W, _X, gn_inv
 from scipy.special import legendre_p_all, roots_legendre
@@ -77,7 +79,7 @@ class Mehler:
         return r
 
 
-def gaussianize_cl(cl_ng, lam, N, lmax=None, nodes_per_ell=2):
+def gaussianize_cl(cl_ng, lam, N, lmax=None, nodes_per_ell=2, truncate_nonpd=True):
     """
     Power spectra of the Gaussian fields y whose G_N transforms have spectra cl_ng.
 
@@ -95,11 +97,17 @@ def gaussianize_cl(cl_ng, lam, N, lmax=None, nodes_per_ell=2):
     nodes_per_ell : int, optional
             Gauss-Legendre nodes per multipole (nodes_per_ell * max(l_in, lmax) in total). 2 is converged to
             ~1e-6 of the peak C_G for pixel-windowed spectra, but only ~1e-2 for unwindowed ones.
+    truncate_nonpd : bool, optional
+            C_G(l) can stop being positive definite at high l (the Cholesky factor needed for the mocks
+            then doesn't exist). If True (default), find the first l >= 2 where it fails and set C_G to
+            exactly zero there and at every higher l (the shape is unchanged), with a warning that says
+            where, and how much variance of y that removes. If False, return everything as computed.
 
     Returns
     -------
     cl_g : array (Nbins, Nbins, lmax + 1)
-            Gaussian spectra, with l = 0, 1 set to zero (the maps have no monopole or dipole).
+            Gaussian spectra, with l = 0, 1 set to zero (the maps have no monopole or dipole), and
+            l >= l_cut set to zero if truncated at l_cut. Mocker treats all-zero multipoles as no power.
     """
     nbins, l_in = cl_ng.shape[0], cl_ng.shape[-1] - 1
     lmax = l_in if lmax is None else lmax
@@ -114,6 +122,18 @@ def gaussianize_cl(cl_ng, lam, N, lmax=None, nodes_per_ell=2):
             xi_g = Mehler(N, lam[:, i], lam[:, j]).inv(xi_ng)
             cl_g[i, j] = cl_g[j, i] = 2 * np.pi * (P_out @ (w * xi_g))
     cl_g[:, :, :2] = 0
+
+    if truncate_nonpd:
+        bad = np.flatnonzero(np.linalg.eigvalsh(np.moveaxis(cl_g, 2, 0)[2:]).min(axis=1) <= 0)
+        if bad.size:
+            cut = bad[0] + 2
+            e = (2 * np.arange(lmax + 1) + 1) / (4 * np.pi)
+            lost = np.einsum("l,il->i", e[cut:], np.diagonal(cl_g, axis1=0, axis2=1).T[:, cut:])
+            warnings.warn(
+                f"gaussianize_cl: C_G is not positive definite from l = {cut} (requested lmax = {lmax}, "
+                f"{bad.size} multipoles fail). Setting C_G to zero for all l >= {cut} (effective lmax = {cut - 1}). "
+                f"Net variance of y removed per bin: {np.array2string(lost, precision=4)}.", stacklevel=2)
+            cl_g[:, :, cut:] = 0
     return cl_g
 
 

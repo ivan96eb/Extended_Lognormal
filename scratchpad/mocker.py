@@ -30,12 +30,13 @@ class Mocker:
         self.nbins, self.lmax = cl_g.shape[0], cl_g.shape[-1] - 1
         self.lam, self.N, self.nside, self.verbose = lam, N, nside, verbose
         cl = np.moveaxis(cl_g, 2, 0)                      # (l, Nbins, Nbins)
-        min_eig = np.linalg.eigvalsh(cl[2:]).min(axis=1)
+        active = np.any(cl != 0, axis=(1, 2))             # all-zero multipoles (l < 2, truncated tail) carry no power
+        min_eig = np.linalg.eigvalsh(cl[active]).min(axis=1)
         if np.any(min_eig <= 0):
-            bad = np.flatnonzero(min_eig <= 0) + 2
+            bad = np.flatnonzero(active)[min_eig <= 0]
             raise ValueError(f"C_G is not positive definite at {bad.size} multipoles, first l = {bad[:10].tolist()}")
-        chol = np.zeros_like(cl)                          # l = 0, 1 stay zero: no monopole or dipole
-        chol[2:] = np.linalg.cholesky(cl[2:])
+        chol = np.zeros_like(cl)
+        chol[active] = np.linalg.cholesky(cl[active])
         ell, self._emm = hp.Alm.getlm(self.lmax)
         self._chol = np.ascontiguousarray(chol[ell].transpose(1, 2, 0))   # factor at each alm index, (Nbins, Nbins, n_alm)
         self._n_threads = min(32, os.cpu_count() or 1)
