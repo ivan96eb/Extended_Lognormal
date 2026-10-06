@@ -4,8 +4,6 @@ From the non-Gaussian C_ell of delta to the C_ell of the Gaussian field y that G
 
     C_NG -> xi_NG(theta) -> xi_G(theta) = F^{-1}(xi_NG(theta)) -> C_G
 """
-import warnings
-
 import numpy as np
 from gn_inv import _W, _X, gn_inv
 from scipy.special import legendre_p_all, roots_legendre
@@ -100,7 +98,7 @@ def gaussianize_cl(cl_ng, lam, N, lmax=None, nodes_per_ell=2, truncate_nonpd=Tru
     truncate_nonpd : bool, optional
             C_G(l) can stop being positive definite at high l (the Cholesky factor needed for the mocks
             then doesn't exist). If True (default), find the first l >= 2 where it fails and set C_G to
-            exactly zero there and at every higher l (the shape is unchanged), with a warning that says
+            exactly zero there and at every higher l (the shape is unchanged), with a printed message that says
             where, and how much variance of y that removes. If False, return everything as computed.
 
     Returns
@@ -129,10 +127,10 @@ def gaussianize_cl(cl_ng, lam, N, lmax=None, nodes_per_ell=2, truncate_nonpd=Tru
             cut = bad[0] + 2
             e = (2 * np.arange(lmax + 1) + 1) / (4 * np.pi)
             lost = np.einsum("l,il->i", e[cut:], np.diagonal(cl_g, axis1=0, axis2=1).T[:, cut:])
-            warnings.warn(
-                f"gaussianize_cl: C_G is not positive definite from l = {cut} (requested lmax = {lmax}, "
-                f"{bad.size} multipoles fail). Setting C_G to zero for all l >= {cut} (effective lmax = {cut - 1}). "
-                f"Net variance of y removed per bin: {np.array2string(lost, precision=4)}.", stacklevel=2)
+            print(f"gaussianize_cl: C_G is not positive definite from l = {cut}; "
+                  f"setting C_G = 0 for l >= {cut} (requested lmax {lmax}, effective lmax {cut - 1}).")
+            print(f"  variance of y removed: {lost[0]:+.4f} (bin 0), {lost[1]:+.4f} (bin 1)" if lost.size == 2
+                  else f"  variance of y removed per bin: {np.array2string(lost, precision=4)}")
             cl_g[:, :, cut:] = 0
     return cl_g
 
