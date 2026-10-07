@@ -1,3 +1,4 @@
+from .aliasing import aliasing_kernel
 from .fitting import fit_gn_inv, gaussianize, variance_from_cl
 from .gn_inv import gn_inv
 from .mocker import Mocker
