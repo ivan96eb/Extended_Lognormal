@@ -4,6 +4,7 @@ alm use healpy's ordering (hp.Alm); maps are HEALPix RING.
 """
 from functools import lru_cache
 from pathlib import Path
+from urllib.request import urlretrieve
 
 import astropy.io.fits as fits
 import ducc0
@@ -19,8 +20,20 @@ def _geometry(nside):
 
 @lru_cache(maxsize=None)
 def pixel_weights(nside):
-    """HEALPix full pixel weights (healpy's use_pixel_weights=True), read from Galaxy_KaRMMa's cache."""
-    path = Path.home() / ".cache" / "karmma" / "full_weights" / f"healpix_full_weights_nside_{nside:04d}.fits"
+    """
+    HEALPix full pixel weights (healpy's use_pixel_weights=True). The file comes from the healpy-data repository
+    (the same source healpy uses) and is downloaded to ~/.cache/extended_lognormal/full_weights on first use.
+    """
+    name = f"healpix_full_weights_nside_{nside:04d}.fits"
+    path = Path.home() / ".cache" / "extended_lognormal" / "full_weights" / name
+    if not path.exists():
+        print(f"Downloading pixel weights for nside = {nside} from healpy-data...")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        try:
+            urlretrieve(f"https://raw.githubusercontent.com/healpy/healpy-data/master/full_weights/{name}", path)
+        except Exception:
+            path.unlink(missing_ok=True)
+            raise
     with fits.open(path) as hdul:
         w8list = hdul[1].data.field(0).astype(np.float64)
     npix = hp.nside2npix(nside)
