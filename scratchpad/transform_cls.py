@@ -29,8 +29,12 @@ class Mehler:
     Correlation transfer F_ij(rho) between y_i, y_j (unit variance, correlation rho) and delta_i = G_i(y_i),
     delta_j = G_j(y_j) (Mehler): F(rho) = sum_{n>=1} c_n^i c_n^j rho^n, c_n = Hermite coefficients of G.
 
-    G2 is analytic: F(rho) = b_i b_j (exp(a_i a_j rho) - 1). Otherwise the series is cut where Parseval says
-    both bins' missing variance is below _PARSEVAL_TOL (cap _NMAX).
+    G2 and G3 are analytic. With k = a_i a_j:
+        G2: F(rho) = b_i b_j (exp(k rho) - 1)                                          (and F^-1 is a logarithm)
+        G3: F(rho) = [exp(k rho) - 1 + m rho] / [(1 + c_i)(1 + c_j)],  m = (a_i + b_i)(a_j + b_j) - k
+    (G3 = [(exp(a x - a^2/2) - 1) + b x] / (1 + c): its Hermite coefficients are a^n / sqrt(n!) for n >= 2 and a + b for
+    n = 1, all over 1 + c, and the n >= 2 terms sum to an exponential.) G3's inverse is found by Newton.
+    Otherwise the series is cut where Parseval says both bins' missing variance is below _PARSEVAL_TOL (cap _NMAX).
     """
 
     def __init__(self, N, lam_i, lam_j):
@@ -38,10 +42,16 @@ class Mehler:
         if N == 2:
             self.k = lam_i[0] * lam_j[0]       # alpha_i alpha_j
             self.s = lam_i[1] * lam_j[1]       # beta_i beta_j
+        elif N == 3:
+            self.k = lam_i[0] * lam_j[0]                                            # a_i a_j
+            self.m = (lam_i[0] + lam_i[1]) * (lam_j[0] + lam_j[1]) - self.k         # (a_i + b_i)(a_j + b_j) - a_i a_j
+            self.d = (1.0 + lam_i[2]) * (1.0 + lam_j[2])
+            self._slope0 = (self.k + self.m) / self.d                               # F'(0)
         else:
             c = [_HW @ gn_inv(_X, N, lam) for lam in (lam_i, lam_j)]
             n = max(self._n_terms(ci) for ci in c)
             self.pc = c[0][1:n + 1] * c[1][1:n + 1]   # coefficient of rho^k is pc[k-1]
+            self._slope0 = self.pc[0]
         self.lo, self.hi = self.F(np.array([-1.0, 1.0]))
 
     @staticmethod
@@ -59,6 +69,8 @@ class Mehler:
         if self.N == 2:
             e = self.s * np.exp(self.k * r)
             return e - self.s, self.k * e
+        if self.N == 3:
+            return (np.expm1(self.k * r) + self.m * r) / self.d, (self.k * np.exp(self.k * r) + self.m) / self.d
         f, d = np.zeros_like(r), np.zeros_like(r)     # Horner for f = sum pc[k-1] r^(k-1), F = r f
         for p in self.pc[::-1]:
             d = d * r + f
@@ -70,14 +82,14 @@ class Mehler:
         t = np.clip(t, self.lo, self.hi)
         if self.N == 2:
             return np.clip(np.log1p(t / self.s) / self.k, -1, 1)
-        r = np.clip(t / self.pc[0], -1, 1)
+        r = np.clip(t / self._slope0, -1, 1)
         for _ in range(80):
             f, df = self.dF(r)
             r = np.clip(r - (f - t) / df, -1, 1)
         return r
 
 
-def gaussianize_cl(cl_ng, lam, N, lmax=None, nodes_per_ell=2, truncate_nonpd=True):
+def gaussianize_cl(cl_ng, lam, N, lmax=None, nodes_per_ell=2, on_npd="zero"):
     """
     Power spectra of the Gaussian fields y whose G_N transforms have spectra cl_ng.
 
@@ -95,17 +107,19 @@ def gaussianize_cl(cl_ng, lam, N, lmax=None, nodes_per_ell=2, truncate_nonpd=Tru
     nodes_per_ell : int, optional
             Gauss-Legendre nodes per multipole (nodes_per_ell * max(l_in, lmax) in total). 2 is converged to
             ~1e-6 of the peak C_G for pixel-windowed spectra, but only ~1e-2 for unwindowed ones.
-    truncate_nonpd : bool, optional
-            C_G(l) can stop being positive definite at high l (the Cholesky factor needed for the mocks
-            then doesn't exist). If True (default), find the first l >= 2 where it fails and set C_G to
-            exactly zero there and at every higher l (the shape is unchanged), with a printed message that says
-            where, and how much variance of y that removes. If False, return everything as computed.
+    on_npd : {"error", "truncate", "zero"}, optional
+            What to do if C_G(l) is not positive definite (NPD) at some l >= 2, so the Cholesky factor the mocks
+            need doesn't exist there. The shape of the output never changes.
+              "error"    : raise a ValueError naming the multipoles.
+              "truncate" : set C_G to exactly zero from the first NPD multipole up (default).
+              "zero"     : set C_G to exactly zero at the NPD multipoles only.
+            For the last two, what was done and how much variance of y it removed is printed.
 
     Returns
     -------
     cl_g : array (Nbins, Nbins, lmax + 1)
-            Gaussian spectra, with l = 0, 1 set to zero (the maps have no monopole or dipole), and
-            l >= l_cut set to zero if truncated at l_cut. Mocker treats all-zero multipoles as no power.
+            Gaussian spectra, with l = 0, 1 set to zero (the maps have no monopole or dipole), plus any multipoles
+            zeroed by on_npd. Mocker treats all-zero multipoles as no power.
     """
     nbins, l_in = cl_ng.shape[0], cl_ng.shape[-1] - 1
     lmax = l_in if lmax is None else lmax
@@ -121,17 +135,26 @@ def gaussianize_cl(cl_ng, lam, N, lmax=None, nodes_per_ell=2, truncate_nonpd=Tru
             cl_g[i, j] = cl_g[j, i] = 2 * np.pi * (P_out @ (w * xi_g))
     cl_g[:, :, :2] = 0
 
-    if truncate_nonpd:
-        bad = np.flatnonzero(np.linalg.eigvalsh(np.moveaxis(cl_g, 2, 0)[2:]).min(axis=1) <= 0)
-        if bad.size:
-            cut = bad[0] + 2
-            e = (2 * np.arange(lmax + 1) + 1) / (4 * np.pi)
-            lost = np.einsum("l,il->i", e[cut:], np.diagonal(cl_g, axis1=0, axis2=1).T[:, cut:])
-            print(f"gaussianize_cl: C_G is not positive definite from l = {cut}; "
-                  f"setting C_G = 0 for l >= {cut} (requested lmax {lmax}, effective lmax {cut - 1}).")
-            print(f"  variance of y removed: {lost[0]:+.4f} (bin 0), {lost[1]:+.4f} (bin 1)" if lost.size == 2
-                  else f"  variance of y removed per bin: {np.array2string(lost, precision=4)}")
-            cl_g[:, :, cut:] = 0
+    if on_npd not in ("error", "truncate", "zero"):
+        raise ValueError(f'on_npd must be "error", "truncate" or "zero", got {on_npd!r}')
+    bad = np.flatnonzero(np.linalg.eigvalsh(np.moveaxis(cl_g, 2, 0)).min(axis=1) <= 0)
+    bad = bad[bad >= 2]                                  # l = 0, 1 are zero on purpose
+    if bad.size:
+        listed = f"l = {bad[:10].tolist()}" + (" ..." if bad.size > 10 else "")
+        if on_npd == "error":
+            raise ValueError(f"C_G is not positive definite at {bad.size} multipoles, {listed}")
+        zeroed = np.arange(bad[0], lmax + 1) if on_npd == "truncate" else bad
+        e = (2 * np.arange(lmax + 1) + 1) / (4 * np.pi)
+        lost = np.einsum("l,il->i", e[zeroed], np.diagonal(cl_g, axis1=0, axis2=1).T[:, zeroed])
+        removed = ", ".join(f"{x:+.4f} (bin {i})" for i, x in enumerate(lost))
+        if on_npd == "truncate":
+            print(f"gaussianize_cl: C_G is not positive definite from l = {bad[0]} ({bad.size} multipoles fail); "
+                  f"setting C_G = 0 for l >= {bad[0]} (requested lmax {lmax}, effective lmax {bad[0] - 1}).")
+        else:
+            print(f"gaussianize_cl: C_G is not positive definite at {bad.size} multipoles, {listed}; "
+                  f"setting C_G = 0 at those multipoles only.")
+        print(f"  variance of y removed: {removed}")
+        cl_g[:, :, zeroed] = 0
     return cl_g
 
 
