@@ -5,8 +5,9 @@ From the non-Gaussian C_ell of delta to the C_ell of the Gaussian field y that G
     C_NG -> xi_NG(theta) -> xi_G(theta) = F^{-1}(xi_NG(theta)) -> C_G
 """
 import numpy as np
-from gn_inv import _W, _X, gn_inv
 from scipy.special import legendre_p_all, roots_legendre
+
+from .gn_inv import _W, _X, gn_inv
 
 _NMAX = 60            # Hermite terms computed per bin
 _PARSEVAL_TOL = 1e-8  # series is cut where the missing variance sum_{k>n} c_k^2 is below this fraction

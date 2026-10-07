@@ -4,9 +4,10 @@ from concurrent.futures import ThreadPoolExecutor
 
 import healpy as hp
 import numpy as np
-from gn_inv import _W, _X, gn_inv
 from scipy.stats import skew
-from transforms import alm2map
+
+from .gn_inv import _W, _X, gn_inv
+from .transforms import alm2map
 
 
 class Mocker:

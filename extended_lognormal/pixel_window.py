@@ -26,7 +26,8 @@ import ducc0
 import healpy as hp
 import numpy as np
 from scipy.ndimage import uniform_filter1d
-from transforms import _geometry, alm2map
+
+from .transforms import _geometry, alm2map
 
 
 def _average_and_replicate(x, nside, nside_fine):

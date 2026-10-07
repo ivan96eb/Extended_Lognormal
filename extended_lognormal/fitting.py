@@ -1,7 +1,8 @@
 import numpy as np
-from gn_inv import _W, _X, gn_inv
 from scipy.optimize import brentq, minimize
 from scipy.stats import norm
+
+from .gn_inv import _W, _X, gn_inv
 
 
 def variance_from_cl(cl, lmin=2):
