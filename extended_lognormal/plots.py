@@ -50,9 +50,10 @@ def plot_histograms(data, mocks, N, titles=None, xlabel="field value", lin_range
             c_mocks = np.array([np.histogram(mocks[k, i], bins=nb, range=(lo, hi))[0] for k in range(n_mocks)])
             mean, std = c_mocks.mean(0), c_mocks.std(0)
 
-            ax.stairs(mean + std, edges, baseline=np.maximum(mean - std, 1e-1), fill=True, color=JAMA[1], alpha=0.35)
-            ax.stairs(mean, edges, color=JAMA[1], ls="--", label=rf"$G_{N}$ mocks (mean of {n_mocks})")
-            ax.stairs(c_data, edges, color=JAMA[0], lw=2.5, label="Data (pixel average)")
+            # the data line is the thick one underneath; the thinner mock line is drawn on top of it
+            ax.stairs(mean + std, edges, baseline=np.maximum(mean - std, 1e-1), fill=True, color=JAMA[1], alpha=0.35, zorder=1)
+            ax.stairs(c_data, edges, color=JAMA[0], lw=2.5, label="Data (pixel average)", zorder=2)
+            ax.stairs(mean, edges, color=JAMA[1], ls="--", label=rf"$G_{N}$ mocks (mean of {n_mocks})", zorder=3)
 
             if scale == "log":
                 ax.set_yscale("log")
