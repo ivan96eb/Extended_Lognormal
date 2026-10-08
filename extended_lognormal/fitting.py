@@ -79,6 +79,7 @@ _WEIGHTS = {
 # candidate lbda (empty if the constraint cannot be met).
 # ---------------------------------------------------------------------------
 
+
 class _G2:
     # free: alpha. beta from Var = beta^2 (e^{alpha^2} - 1)
     starts = ((0.2,), (0.5,), (1.0,))
@@ -121,8 +122,12 @@ class _G4:
     # K(u) = log E[e^{uZ}] convex; Var is strictly increasing in s and
     # the root is unique. Solved by Newton in log s, warm-started from
     # the previous solution, with brentq as a fallback.
-    starts = tuple((np.arctan(r), np.log(t), x0)
-                   for r in (0.5, 1.0, 2.0) for t in (1.0, 3.0) for x0 in (0.0, 1.5))
+    starts = tuple(
+        (np.arctan(r), np.log(t), x0)
+        for r in (0.5, 1.0, 2.0)
+        for t in (1.0, 3.0)
+        for x0 in (0.0, 1.5)
+    )
 
     def __init__(self, s2):
         self.s2 = s2
@@ -192,8 +197,13 @@ class _G5:
     # free: a1, a2, log t, x0. With U = A(x) + b C(x), E[U] is linear and
     # E[U^2] quadratic in b, so E[U^2] = (1 + sigma^2) E[U]^2 is a quadratic
     # for b. Keep roots with E[U] > 0 (positive normalization).
-    starts = tuple((a1, a2, np.log(t), x0)
-                   for a1 in (0.3, 0.6) for a2 in (0.3, 0.8) for t in (1.0, 3.0) for x0 in (0.0, 1.5))
+    starts = tuple(
+        (a1, a2, np.log(t), x0)
+        for a1 in (0.3, 0.6)
+        for a2 in (0.3, 0.8)
+        for t in (1.0, 3.0)
+        for x0 in (0.0, 1.5)
+    )
 
     def __init__(self, s2):
         self.s2 = s2
@@ -250,11 +260,15 @@ def _fit_one(x, y, w, N, model, starts, label):
         if np.isfinite(res.fun) and (best is None or res.fun < best.fun):
             best = res
     if best is None:
-        raise RuntimeError(f"G{N} fit failed for {label}: no start reached a finite cost")
+        raise RuntimeError(
+            f"G{N} fit failed for {label}: no start reached a finite cost"
+        )
     return min(model.to_lbda(best.x), key=loss)
 
 
-def fit_gn_inv(fields, N, sigma2, weight="sqrt", n_bins=1000, x_range=(-4, 4), init=None):
+def fit_gn_inv(
+    fields, N, sigma2, weight="sqrt", n_bins=1000, x_range=(-4, 4), init=None
+):
     """
     Fits the G_N^{-1} transformation (see gn_inv) to each field, with the
     variance of the model constrained to sigma^2 so that it is consistent
@@ -312,5 +326,7 @@ def fit_gn_inv(fields, N, sigma2, weight="sqrt", n_bins=1000, x_range=(-4, 4), i
         else:
             f0 = model.to_free(init[:, i])
             starts = [f0] + [f0 + rng.normal(0, 0.15, f0.size) for _ in range(2)]
-        lbda[:, i] = _fit_one(x, y, _WEIGHTS[weight](counts), N, model, starts, f"field {i}")
+        lbda[:, i] = _fit_one(
+            x, y, _WEIGHTS[weight](counts), N, model, starts, f"field {i}"
+        )
     return lbda[:, 0] if single else lbda

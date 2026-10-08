@@ -1,4 +1,5 @@
 """Validation plots: one-point distributions and C_ell ratios of mocks against data / theory."""
+
 import matplotlib.pyplot as plt
 import numpy as np
 from cycler import cycler
@@ -15,18 +16,40 @@ def set_plot_style():
     cmap = ListedColormap(JAMA, name="default_jama")
     if cmap.name not in colormaps:
         colormaps.register(cmap)
-    rcParams.update({
-        "savefig.dpi": 200, "figure.dpi": 200, "font.size": 16,
-        "text.usetex": True, "font.family": "serif", "font.serif": ["Computer Modern"],
-        "xtick.direction": "in", "ytick.direction": "in", "xtick.top": True, "ytick.right": True,
-        "xtick.minor.visible": True, "ytick.minor.visible": True,
-        "axes.linewidth": 1.2, "lines.linewidth": 1.5,
-        "legend.framealpha": 0.9, "legend.fontsize": 14,
-        "image.cmap": cmap.name, "axes.prop_cycle": cycler(color=JAMA),
-    })
+    rcParams.update(
+        {
+            "savefig.dpi": 200,
+            "figure.dpi": 200,
+            "font.size": 16,
+            "text.usetex": True,
+            "font.family": "serif",
+            "font.serif": ["Computer Modern"],
+            "xtick.direction": "in",
+            "ytick.direction": "in",
+            "xtick.top": True,
+            "ytick.right": True,
+            "xtick.minor.visible": True,
+            "ytick.minor.visible": True,
+            "axes.linewidth": 1.2,
+            "lines.linewidth": 1.5,
+            "legend.framealpha": 0.9,
+            "legend.fontsize": 14,
+            "image.cmap": cmap.name,
+            "axes.prop_cycle": cycler(color=JAMA),
+        }
+    )
 
 
-def plot_histograms(data, mocks, N, titles=None, xlabel="field value", lin_range=(-1, 2), n_log=100, n_lin=200):
+def plot_histograms(
+    data,
+    mocks,
+    N,
+    titles=None,
+    xlabel="field value",
+    lin_range=(-1, 2),
+    n_log=100,
+    n_lin=200,
+):
     """
     One-point distribution of the data against the mocks, one column per bin.
 
@@ -39,21 +62,52 @@ def plot_histograms(data, mocks, N, titles=None, xlabel="field value", lin_range
     histogram of the mocks and the band is their +-1 sigma scatter. Returns the figure.
     """
     n_mocks, n_bins = mocks.shape[:2]
-    fig, axes = plt.subplots(2, n_bins, figsize=(8 * n_bins, 11), layout="constrained", squeeze=False)
+    fig, axes = plt.subplots(
+        2, n_bins, figsize=(8 * n_bins, 11), layout="constrained", squeeze=False
+    )
     for i in range(n_bins):
         hi_log = max(data[i].max(), mocks[:, i].max())
-        for row, (nb, scale, (lo, hi)) in enumerate(((n_log, "log", (lin_range[0], hi_log)), (n_lin, "linear", lin_range))):
+        for row, (nb, scale, (lo, hi)) in enumerate(
+            ((n_log, "log", (lin_range[0], hi_log)), (n_lin, "linear", lin_range))
+        ):
             ax = axes[row, i]
             edges = np.linspace(lo, hi, nb + 1)
             # bins=int with range= takes numpy's fast uniform-bin path (about 4x faster than passing the edges array)
             c_data = np.histogram(data[i], bins=nb, range=(lo, hi))[0]
-            c_mocks = np.array([np.histogram(mocks[k, i], bins=nb, range=(lo, hi))[0] for k in range(n_mocks)])
+            c_mocks = np.array(
+                [
+                    np.histogram(mocks[k, i], bins=nb, range=(lo, hi))[0]
+                    for k in range(n_mocks)
+                ]
+            )
             mean, std = c_mocks.mean(0), c_mocks.std(0)
 
             # the data line is the thick one underneath; the thinner mock line is drawn on top of it
-            ax.stairs(mean + std, edges, baseline=np.maximum(mean - std, 1e-1), fill=True, color=JAMA[1], alpha=0.35, zorder=1)
-            ax.stairs(c_data, edges, color=JAMA[0], lw=2.5, label="Data (pixel average)", zorder=2)
-            ax.stairs(mean, edges, color=JAMA[1], ls="--", label=rf"$G_{N}$ mocks (mean of {n_mocks})", zorder=3)
+            ax.stairs(
+                mean + std,
+                edges,
+                baseline=np.maximum(mean - std, 1e-1),
+                fill=True,
+                color=JAMA[1],
+                alpha=0.35,
+                zorder=1,
+            )
+            ax.stairs(
+                c_data,
+                edges,
+                color=JAMA[0],
+                lw=2.5,
+                label="Data (pixel average)",
+                zorder=2,
+            )
+            ax.stairs(
+                mean,
+                edges,
+                color=JAMA[1],
+                ls="--",
+                label=rf"$G_{N}$ mocks (mean of {n_mocks})",
+                zorder=3,
+            )
 
             if scale == "log":
                 ax.set_yscale("log")
@@ -82,7 +136,14 @@ def plot_cl_ratios(cl_mock, cl_mock_err, cl_theory, N, n_mocks, lmin=2, ell_mark
     """
     n_bins, lmax = cl_mock.shape[0], cl_mock.shape[-1] - 1
     ell = np.arange(lmax + 1)[lmin:]
-    fig, axes = plt.subplots(n_bins, n_bins, figsize=(9 * n_bins, 5.5 * n_bins), sharex=True, layout="constrained", squeeze=False)
+    fig, axes = plt.subplots(
+        n_bins,
+        n_bins,
+        figsize=(9 * n_bins, 5.5 * n_bins),
+        sharex=True,
+        layout="constrained",
+        squeeze=False,
+    )
     for i in range(n_bins):
         for j in range(n_bins):
             ax = axes[i, j]

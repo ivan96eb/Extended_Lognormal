@@ -45,8 +45,11 @@ def _g4_log_unnormalized(x, a1, a2, t, x0):
 def _g4(x, a1, a2, t, x0):
     # G4 is G5 with b = 0, but with no b*x term the whole thing is one
     # exponential: y = U/E[U] - 1 = expm1(log U - log E[U])
-    log_mean = np.log(np.sum(_W * np.exp(_g4_log_unnormalized(_X, a1, a2, t, x0)),
-                             axis=-1, keepdims=True))
+    log_mean = np.log(
+        np.sum(
+            _W * np.exp(_g4_log_unnormalized(_X, a1, a2, t, x0)), axis=-1, keepdims=True
+        )
+    )
     return np.expm1(_g4_log_unnormalized(x, a1, a2, t, x0) - log_mean)
 
 
@@ -89,5 +92,7 @@ def gn_inv(x, N, lbda):
         raise ValueError(f"Unknown model N={N}, expected one of {list(_MODELS)}")
     lbda = np.asarray(lbda, dtype=float)
     if lbda.shape[0] != N:
-        raise ValueError(f"lbda must have shape (N, ...) = ({N}, ...), got {lbda.shape}")
+        raise ValueError(
+            f"lbda must have shape (N, ...) = ({N}, ...), got {lbda.shape}"
+        )
     return _MODELS[N](np.asarray(x), *lbda[..., np.newaxis])

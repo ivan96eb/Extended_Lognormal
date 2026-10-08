@@ -1,4 +1,5 @@
 """Mocks: correlated Gaussian maps y from C_G, then field_i = G_i(y_i) pixel by pixel."""
+
 import os
 from concurrent.futures import ThreadPoolExecutor
 
@@ -30,28 +31,40 @@ class Mocker:
     def __init__(self, cl_g, lam, N, nside, verbose=False):
         self.nbins, self.lmax = cl_g.shape[0], cl_g.shape[-1] - 1
         self.lam, self.N, self.nside, self.verbose = lam, N, nside, verbose
-        cl = np.moveaxis(cl_g, 2, 0)                      # (l, Nbins, Nbins)
-        active = np.any(cl != 0, axis=(1, 2))             # all-zero multipoles (l < 2, truncated tail) carry no power
+        cl = np.moveaxis(cl_g, 2, 0)  # (l, Nbins, Nbins)
+        active = np.any(
+            cl != 0, axis=(1, 2)
+        )  # all-zero multipoles (l < 2, truncated tail) carry no power
         min_eig = np.linalg.eigvalsh(cl[active]).min(axis=1)
         if np.any(min_eig <= 0):
             bad = np.flatnonzero(active)[min_eig <= 0]
-            raise ValueError(f"C_G is not positive definite at {bad.size} multipoles, first l = {bad[:10].tolist()}")
+            raise ValueError(
+                f"C_G is not positive definite at {bad.size} multipoles, first l = {bad[:10].tolist()}"
+            )
         chol = np.zeros_like(cl)
         chol[active] = np.linalg.cholesky(cl[active])
         ell, self._emm = hp.Alm.getlm(self.lmax)
-        self._chol = np.ascontiguousarray(chol[ell].transpose(1, 2, 0))   # factor at each alm index, (Nbins, Nbins, n_alm)
+        self._chol = np.ascontiguousarray(
+            chol[ell].transpose(1, 2, 0)
+        )  # factor at each alm index, (Nbins, Nbins, n_alm)
         self._n_threads = min(32, os.cpu_count() or 1)
 
         # what the truncated C_G implies for y, and for the field if y ~ N(0, var_y)
         e = (2 * np.arange(self.lmax + 1) + 1) / (4 * np.pi)
-        cov_y = np.einsum("l,ijl->ij", e, cl_g)           # l = 0, 1 are zero in cl_g
+        cov_y = np.einsum("l,ijl->ij", e, cl_g)  # l = 0, 1 are zero in cl_g
         self.var_y = np.diag(cov_y).copy()
         self.corr_y = cov_y / np.sqrt(np.outer(self.var_y, self.var_y))
         if verbose:
-            print(f"Mocker: {self.nbins} bins, nside {nside}, lmax {self.lmax} "
-                  f"({'above' if self.lmax > 3 * nside - 1 else 'within'} 3*nside-1 = {3 * nside - 1}), G{N}")
-            print(f"  expected var(y) per bin: {np.round(self.var_y, 4)}   (1 = nothing lost to the lmax cut)")
-            print(f"  expected y correlation between bins: {np.round(self.corr_y[np.tril_indices(self.nbins, -1)], 4)}")
+            print(
+                f"Mocker: {self.nbins} bins, nside {nside}, lmax {self.lmax} "
+                f"({'above' if self.lmax > 3 * nside - 1 else 'within'} 3*nside-1 = {3 * nside - 1}), G{N}"
+            )
+            print(
+                f"  expected var(y) per bin: {np.round(self.var_y, 4)}   (1 = nothing lost to the lmax cut)"
+            )
+            print(
+                f"  expected y correlation between bins: {np.round(self.corr_y[np.tril_indices(self.nbins, -1)], 4)}"
+            )
 
     def draw_xlm(self, rng=None, n_mocks=None):
         """
@@ -80,7 +93,7 @@ class Mocker:
         Latent xlm (..., Nbins, n_alm) -> alm of y with spectra C_G: y_lm,i = sum_j L_l,ij x_lm,j,
         with 1/sqrt(2) for m > 0 (so unit power) and real for m = 0, as in Galaxy_KaRMMa.
         """
-        ylm = sum(self._chol[:, j] * xlm[..., j:j + 1, :] for j in range(self.nbins))
+        ylm = sum(self._chol[:, j] * xlm[..., j : j + 1, :] for j in range(self.nbins))
         ylm[..., self._emm > 0] *= np.sqrt(0.5)
         ylm[..., self._emm == 0] = ylm[..., self._emm == 0].real
         return ylm
@@ -94,13 +107,19 @@ class Mocker:
         if xlm is None:
             xlm = self.draw_xlm(rng, n_mocks)
         alm = self.apply_cl(xlm)
-        y = alm2map(alm.reshape(-1, alm.shape[-1]), self.nside, self.lmax).reshape(alm.shape[:-1] + (-1,))
+        y = alm2map(alm.reshape(-1, alm.shape[-1]), self.nside, self.lmax).reshape(
+            alm.shape[:-1] + (-1,)
+        )
         if self.verbose:
             y3 = y.reshape(-1, self.nbins, y.shape[-1])
             cov = np.einsum("mip,mjp->ij", y3, y3) / (y3.shape[0] * y3.shape[2])
-            corr = (cov / np.sqrt(np.outer(np.diag(cov), np.diag(cov))))[np.tril_indices(self.nbins, -1)]
-            print(f"y maps{f' ({y3.shape[0]} mocks pooled)' if y.ndim == 3 else ''}: mean {np.round(y3.mean((0, 2)), 4)}   "
-                  f"var {np.round(y3.var(2).mean(0), 4)} (expected {np.round(self.var_y, 4)})   corr {np.round(corr, 4)}")
+            corr = (cov / np.sqrt(np.outer(np.diag(cov), np.diag(cov))))[
+                np.tril_indices(self.nbins, -1)
+            ]
+            print(
+                f"y maps{f' ({y3.shape[0]} mocks pooled)' if y.ndim == 3 else ''}: mean {np.round(y3.mean((0, 2)), 4)}   "
+                f"var {np.round(y3.var(2).mean(0), 4)} (expected {np.round(self.var_y, 4)})   corr {np.round(corr, 4)}"
+            )
         return y
 
     def apply_G(self, y):
@@ -117,13 +136,17 @@ class Mocker:
             out3 = out.reshape(-1, self.nbins, y.shape[-1])
             for i in range(self.nbins):
                 d = out3[:, i].ravel()
-                g = gn_inv(np.sqrt(self.var_y[i]) * _X, self.N, self.lam[:, i])   # y ~ N(0, var_y), on gn_inv's grid
+                g = gn_inv(
+                    np.sqrt(self.var_y[i]) * _X, self.N, self.lam[:, i]
+                )  # y ~ N(0, var_y), on gn_inv's grid
                 mean = _W @ g
                 var = _W @ (g - mean) ** 2
                 sk = _W @ (g - mean) ** 3 / var**1.5
-                print(f"field bin {i}: mean {d.mean():+.4f}  var {d.var():.5f}  skew {skew(d):.3f}  "
-                      f"min {d.min():+.3f}  max {d.max():.2f}\n"
-                      f"       implied by the model for y ~ N(0, var_y): mean {mean:+.4f}  var {var:.5f}  skew {sk:.3f}")
+                print(
+                    f"field bin {i}: mean {d.mean():+.4f}  var {d.var():.5f}  skew {skew(d):.3f}  "
+                    f"min {d.min():+.3f}  max {d.max():.2f}\n"
+                    f"       implied by the model for y ~ N(0, var_y): mean {mean:+.4f}  var {var:.5f}  skew {sk:.3f}"
+                )
         return out
 
     def mocks(self, n_mocks, rng=None, chunk_size=10):
@@ -137,7 +160,9 @@ class Mocker:
         try:
             for start in range(0, n_mocks, chunk_size):
                 self.verbose = verbose and start == 0
-                yield self.apply_G(self.get_y_maps(rng=rng, n_mocks=min(chunk_size, n_mocks - start)))
+                yield self.apply_G(
+                    self.get_y_maps(rng=rng, n_mocks=min(chunk_size, n_mocks - start))
+                )
         finally:
             self.verbose = verbose
 

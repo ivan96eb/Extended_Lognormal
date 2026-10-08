@@ -20,6 +20,7 @@ The analysis in step 4 integrates over each pixel a second time, so c(l) is the 
 window: c = W_healpy^2 for l <= 4 N_side - 1, where both exist (they agree to 0.3%). measure_pixel_window returns
 that raw c = W^2; pixel_window smooths it and returns W = sqrt(c).
 """
+
 from pathlib import Path
 
 import ducc0
@@ -33,11 +34,20 @@ from .transforms import _geometry, alm2map
 def _average_and_replicate(x, nside, nside_fine):
     """hp.ud_grade(hp.ud_grade(x, nside), nside_fine) for a RING map x, done in nested order (faster at N_side 4096)."""
     kids = (nside_fine // nside) ** 2
-    average = hp.reorder(x, r2n=True).reshape(-1, kids).mean(axis=1)    # children of a pixel are contiguous in NESTED
+    average = (
+        hp.reorder(x, r2n=True).reshape(-1, kids).mean(axis=1)
+    )  # children of a pixel are contiguous in NESTED
     return hp.reorder(np.repeat(average, kids), n2r=True)
 
 
-def measure_pixel_window(nside=256, lmax=3 * 1024 - 1, nside_fine=4096, n_realizations=20, seed=0, verbose=True):
+def measure_pixel_window(
+    nside=256,
+    lmax=3 * 1024 - 1,
+    nside_fine=4096,
+    n_realizations=20,
+    seed=0,
+    verbose=True,
+):
     """
     Raw measurement of c(l) = W(l)^2, l = 0 .. lmax (set to 1 at l = 0, 1). About 20 s per realization at N_side_fine = 4096.
     The fine grid should resolve every mode: lmax <~ 0.75 nside_fine (the quadrature error of the pixel average
@@ -58,8 +68,14 @@ def measure_pixel_window(nside=256, lmax=3 * 1024 - 1, nside_fine=4096, n_realiz
 
         x = alm2map(alm[None], nside_fine, lmax)[0]
         replicated = _average_and_replicate(x, nside, nside_fine)
-        blm = ducc0.sht.adjoint_synthesis(map=replicated[None, None], **geometry, lmax=lmax, mmax=lmax, spin=0,
-                                          nthreads=0)[0, 0] * (4 * np.pi / npix_fine)    # equal pixel areas
+        blm = ducc0.sht.adjoint_synthesis(
+            map=replicated[None, None],
+            **geometry,
+            lmax=lmax,
+            mmax=lmax,
+            spin=0,
+            nthreads=0,
+        )[0, 0] * (4 * np.pi / npix_fine)  # equal pixel areas
         cross += hp.alm2cl(blm, alm, lmax=lmax)
         auto += hp.alm2cl(alm, lmax=lmax)
         if verbose:
@@ -79,12 +95,19 @@ def pixel_window(nside=256, lmax=3 * 1024 - 1, smooth=321, cache=None, **kwargs)
     about 0.001 above l = 500, which is ~10% of W^2 above l = 1500). 321 leaves ~8% of that scatter and, unlike a
     running mean of the same width, does not bias the steep part of the curve. smooth=0 returns the raw measurement. Extra kwargs go to measure_pixel_window.
     """
-    cache = Path(cache or Path(__file__).parent / "cache" / f"pixel_window_nside{nside}_lmax{lmax}.npz")
+    cache = Path(
+        cache
+        or Path(__file__).parent / "cache" / f"pixel_window_nside{nside}_lmax{lmax}.npz"
+    )
     if cache.exists():
         raw = np.load(cache)["w2"]
     else:
         raw = measure_pixel_window(nside, lmax, **kwargs)
         cache.parent.mkdir(parents=True, exist_ok=True)
         np.savez(cache, w2=raw)
-    w2 = savgol_filter(raw, min(smooth, raw.size - 1 + raw.size % 2), 3) if smooth else raw
+    w2 = (
+        savgol_filter(raw, min(smooth, raw.size - 1 + raw.size % 2), 3)
+        if smooth
+        else raw
+    )
     return np.sqrt(np.maximum(w2, 0.0))
