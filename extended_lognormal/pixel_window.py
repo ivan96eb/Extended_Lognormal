@@ -25,7 +25,7 @@ from pathlib import Path
 import ducc0
 import healpy as hp
 import numpy as np
-from scipy.ndimage import uniform_filter1d
+from scipy.signal import savgol_filter
 
 from .transforms import _geometry, alm2map
 
@@ -70,13 +70,14 @@ def measure_pixel_window(nside=256, lmax=3 * 1024 - 1, nside_fine=4096, n_realiz
     return w2
 
 
-def pixel_window(nside=256, lmax=3 * 1024 - 1, smooth=41, cache=None, **kwargs):
+def pixel_window(nside=256, lmax=3 * 1024 - 1, smooth=321, cache=None, **kwargs):
     """
     W(l) for l = 0 .. lmax, such that C_pix = W^2 * C (same convention as healpy's pixwin and the old pixwin_256.npy).
     Cosmology independent, so the raw measurement of W^2 is cached on disk (in the package's cache/ folder) (first call takes about 20 s per
-    realization). `smooth` is the width of a running mean applied to W^2 before the square root, to beat down its
-    noise (the window is smooth; with 20 realizations the l-to-l scatter in W^2 is about 0.0011 above l = 1500,
-    where W^2 ~ 0.01, before smoothing). Extra kwargs go to measure_pixel_window.
+    realization). `smooth` is the window length (odd, in multipoles) of a cubic Savitzky-Golay filter applied to W^2 before the
+    square root, to beat down its noise (the window is smooth; with 20 realizations the l-to-l scatter in W^2 is
+    about 0.001 above l = 500, which is ~10% of W^2 above l = 1500). 321 leaves ~8% of that scatter and, unlike a
+    running mean of the same width, does not bias the steep part of the curve. smooth=0 returns the raw measurement. Extra kwargs go to measure_pixel_window.
     """
     cache = Path(cache or Path(__file__).parent / "cache" / f"pixel_window_nside{nside}_lmax{lmax}.npz")
     if cache.exists():
@@ -85,5 +86,5 @@ def pixel_window(nside=256, lmax=3 * 1024 - 1, smooth=41, cache=None, **kwargs):
         raw = measure_pixel_window(nside, lmax, **kwargs)
         cache.parent.mkdir(parents=True, exist_ok=True)
         np.savez(cache, w2=raw)
-    w2 = uniform_filter1d(raw, size=smooth, mode="nearest") if smooth else raw
+    w2 = savgol_filter(raw, min(smooth, raw.size - 1 + raw.size % 2), 3) if smooth else raw
     return np.sqrt(np.maximum(w2, 0.0))
