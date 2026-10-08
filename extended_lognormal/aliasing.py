@@ -97,12 +97,13 @@ def aliasing_kernel(nside=256, lmax=None, lmax_in=3 * 1024 - 1, cache=None, verb
     """
     Exact measurement kernel K (lmax + 1, lmax_in + 1) of `transforms.map2alm` at this nside and lmax (default
     3 nside - 1): an isotropic field with spectrum C_L (L <= lmax_in), sampled at the pixel centres, is measured as
-    <C_hat_l> = K @ C. Includes the in-band response and the aliasing from L > lmax. Cached in an .npz next to this file.
+    <C_hat_l> = K @ C. Includes the in-band response and the aliasing from L > lmax. Cached (compressed) in an .npz in the package's cache/ folder.
     """
     lmax = 3 * nside - 1 if lmax is None else lmax
-    cache = Path(cache or Path(__file__).parent / f"aliasing_kernel_nside{nside}_lmax{lmax}_in{lmax_in}.npz")
+    cache = Path(cache or Path(__file__).parent / "cache" / f"aliasing_kernel_nside{nside}_lmax{lmax}_in{lmax_in}.npz")
     if cache.exists():
         return np.load(cache)["K"]
     K = _compute_kernel(nside, lmax, lmax_in, verbose)
-    np.savez(cache, K=K)
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(cache, K=K)
     return K

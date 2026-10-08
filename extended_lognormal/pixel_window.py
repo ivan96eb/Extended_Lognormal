@@ -73,16 +73,17 @@ def measure_pixel_window(nside=256, lmax=3 * 1024 - 1, nside_fine=4096, n_realiz
 def pixel_window(nside=256, lmax=3 * 1024 - 1, smooth=41, cache=None, **kwargs):
     """
     W(l) for l = 0 .. lmax, such that C_pix = W^2 * C (same convention as healpy's pixwin and the old pixwin_256.npy).
-    Cosmology independent, so the raw measurement of W^2 is cached on disk (first call takes about 20 s per
+    Cosmology independent, so the raw measurement of W^2 is cached on disk (in the package's cache/ folder) (first call takes about 20 s per
     realization). `smooth` is the width of a running mean applied to W^2 before the square root, to beat down its
     noise (the window is smooth; with 20 realizations the l-to-l scatter in W^2 is about 0.0011 above l = 1500,
     where W^2 ~ 0.01, before smoothing). Extra kwargs go to measure_pixel_window.
     """
-    cache = Path(cache or Path(__file__).parent / f"pixel_window_nside{nside}_lmax{lmax}.npz")
+    cache = Path(cache or Path(__file__).parent / "cache" / f"pixel_window_nside{nside}_lmax{lmax}.npz")
     if cache.exists():
         raw = np.load(cache)["w2"]
     else:
         raw = measure_pixel_window(nside, lmax, **kwargs)
+        cache.parent.mkdir(parents=True, exist_ok=True)
         np.savez(cache, w2=raw)
     w2 = uniform_filter1d(raw, size=smooth, mode="nearest") if smooth else raw
     return np.sqrt(np.maximum(w2, 0.0))
